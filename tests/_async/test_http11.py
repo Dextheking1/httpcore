@@ -393,12 +393,12 @@ async def test_http11_write_error_closes_request_body():
     """
 
     class WriteErrorStream(httpcore.AsyncMockStream):
-        def __init__(self, buffer: list[bytes], fail_after_writes: int) -> None:
+        def __init__(self, buffer: typing.List[bytes], fail_after_writes: int) -> None:
             super().__init__(buffer)
             self._writes = 0
             self._fail_after_writes = fail_after_writes
 
-        async def write(self, buffer: bytes, timeout: float | None = None) -> None:
+        async def write(self, buffer: bytes, timeout: typing.Optional[float] = None) -> None:
             self._writes += 1
             if self._writes > self._fail_after_writes:
                 raise httpcore.WriteError("Simulated write failure")
