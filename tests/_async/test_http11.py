@@ -1,3 +1,5 @@
+import typing
+
 import pytest
 
 import httpcore
@@ -402,22 +404,16 @@ async def test_http11_write_error_closes_request_body():
                 raise httpcore.WriteError("Simulated write failure")
             await super().write(buffer, timeout)
 
-    class TrackingBody:
-        """Async-iterable body, recording if its iterator gets closed."""
+    body_closed = False
 
-        def __init__(self) -> None:
-            self.saw_generator_exit = False
-
-        def __aiter__(self):
-            async def gen():
-                try:
-                    for index in range(10):
-                        yield b"chunk-%d" % index
-                except GeneratorExit:
-                    self.saw_generator_exit = True
-                    raise
-
-            return gen()
+    async def streaming_body() -> typing.AsyncIterator[bytes]:
+        nonlocal body_closed
+        try:
+            for index in range(10):
+                yield b"chunk-%d" % index
+        except GeneratorExit:
+            body_closed = True
+            raise
 
     origin = httpcore.Origin(b"https", b"example.com", 443)
     # Two writes succeed: the request headers, then the first body chunk.
@@ -430,11 +426,12 @@ async def test_http11_write_error_closes_request_body():
         ],
         fail_after_writes=2,
     )
-    body = TrackingBody()
     async with httpcore.AsyncHTTP11Connection(origin=origin, stream=stream) as conn:
-        response = await conn.request("POST", "https://example.com/", content=body)
+        response = await conn.request(
+            "POST", "https://example.com/", content=streaming_body()
+        )
         # The `WriteError` is suppressed, and the response is still readable.
         assert response.status == 200
         assert response.content == b""
 
-    assert body.saw_generator_exit
+    assert body_closed
