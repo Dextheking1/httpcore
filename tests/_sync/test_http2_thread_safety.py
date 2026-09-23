@@ -16,6 +16,7 @@ test) and asserts every request succeeds.
 
 import threading
 import time
+import typing
 
 import h2.config
 import h2.connection
@@ -24,10 +25,10 @@ import h2.events
 import httpcore
 
 
-class FakeStream:
+class FakeStream(httpcore.NetworkStream):
     """In-memory full-duplex socket backed by a real server-side h2 connection."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._server = h2.connection.H2Connection(
             config=h2.config.H2Configuration(client_side=False)
         )
@@ -35,9 +36,9 @@ class FakeStream:
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
         self._closed = False
-        self._responded = set()
+        self._responded: set[int] = set()
 
-    def _respond(self, stream_id):
+    def _respond(self, stream_id: int) -> None:
         self._server.send_headers(
             stream_id,
             [(":status", "200"), ("content-length", "2")],
@@ -46,10 +47,10 @@ class FakeStream:
         self._server.send_data(stream_id, b"ok", end_stream=True)
 
     # -- NetworkStream interface --
-    def write(self, data, timeout=None):
+    def write(self, buffer: bytes, timeout: float | None = None) -> None:
         with self._lock:
-            if data:
-                for event in self._server.receive_data(data):
+            if buffer:
+                for event in self._server.receive_data(buffer):
                     if isinstance(event, h2.events.RequestReceived):
                         if event.stream_ended is not None:
                             self._responded.add(event.stream_id)
@@ -66,11 +67,11 @@ class FakeStream:
                             self._respond(event.stream_id)
             self._cond.notify_all()
 
-    def read(self, n, timeout=None):
+    def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._lock:
             while True:
-                data = self._server.data_to_send(n)
+                data = self._server.data_to_send(max_bytes)
                 if data:
                     return data
                 if self._closed:
@@ -80,12 +81,12 @@ class FakeStream:
                     return b""
                 self._cond.wait(timeout=1.0)
 
-    def close(self):
+    def close(self) -> None:
         with self._lock:
             self._closed = True
             self._cond.notify_all()
 
-    def get_extra_info(self, name):
+    def get_extra_info(self, info: str) -> typing.Any:
         return None
 
 
