@@ -61,8 +61,13 @@ class AsyncHTTP2Connection(AsyncConnectionInterface):
         self._read_lock = AsyncLock()
         self._write_lock = AsyncLock()
         # Guards the shared `h2` state machine on the send path, plus
-        # stream-ID allocation and the `_events` mapping. See the sync
-        # `HTTP2Connection` for details. (encode/httpx#3566)
+        # stream-ID allocation and the `_events` mapping. The same
+        # `HTTP2Connection` is handed to multiple threads by the connection
+        # pool (HTTP/2 multiplexing), and `h2` is not thread-safe: concurrent
+        # `send_headers` calls corrupt the HPACK encoder table ("deque mutated
+        # during iteration") and the streams dict ("dictionary changed size
+        # during iteration"), and concurrent `get_next_available_stream_id`
+        # calls can hand out duplicate stream IDs. (encode/httpx#3566)
         self._send_lock = AsyncLock()
         self._sent_connection_init = False
         self._used_all_stream_ids = False
@@ -140,7 +145,10 @@ class AsyncHTTP2Connection(AsyncConnectionInterface):
             # send itself are serialized under a single lock. Note that h2
             # requires `get_next_available_stream_id()` to be immediately
             # followed by the matching `send_headers()` call, otherwise
-            # concurrent tasks may be handed duplicate stream IDs.
+            # concurrent callers may be handed duplicate stream IDs. Without
+            # this, clients sharing one connection hit errors such as
+            # "deque mutated during iteration", "dictionary changed size
+            # during iteration", and `StreamIDTooLowError`.
             # (encode/httpx#3566)
             async with self._send_lock:
                 stream_id = self._h2_state.get_next_available_stream_id()
@@ -148,7 +156,8 @@ class AsyncHTTP2Connection(AsyncConnectionInterface):
                 kwargs = {"request": request, "stream_id": stream_id}
                 async with Trace("send_request_headers", logger, request, kwargs):
                     await self._send_request_headers(
-                        request=request, stream_id=stream_id
+                        request=request,
+                        stream_id=stream_id,
                     )
                 async with Trace("send_request_body", logger, request, kwargs):
                     await self._send_request_body(request=request, stream_id=stream_id)
