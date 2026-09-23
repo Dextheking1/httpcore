@@ -141,12 +141,12 @@ class HTTP2Connection(ConnectionInterface):
 
         try:
             # The send path mutates the shared `h2` state machine, which is
-            # not thread-safe, so stream ID allocation and the send itself
-            # are serialized under a single lock. Note that h2 requires
-            # `get_next_available_stream_id()` to be immediately followed by
-            # the matching `send_headers()` call, otherwise concurrent
-            # threads may be handed duplicate stream IDs. Without this,
-            # multithreaded clients sharing one connection hit errors such as
+            # not safe for concurrent use, so stream ID allocation and the
+            # send itself are serialized under a single lock. Note that h2
+            # requires `get_next_available_stream_id()` to be immediately
+            # followed by the matching `send_headers()` call, otherwise
+            # concurrent callers may be handed duplicate stream IDs. Without
+            # this, clients sharing one connection hit errors such as
             # "deque mutated during iteration", "dictionary changed size
             # during iteration", and `StreamIDTooLowError`.
             # (encode/httpx#3566)
@@ -155,7 +155,10 @@ class HTTP2Connection(ConnectionInterface):
                 self._events[stream_id] = []
                 kwargs = {"request": request, "stream_id": stream_id}
                 with Trace("send_request_headers", logger, request, kwargs):
-                    self._send_request_headers(request=request, stream_id=stream_id)
+                    self._send_request_headers(
+                        request=request,
+                        stream_id=stream_id,
+                    )
                 with Trace("send_request_body", logger, request, kwargs):
                     self._send_request_body(request=request, stream_id=stream_id)
             with Trace(
