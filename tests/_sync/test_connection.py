@@ -15,6 +15,7 @@ from httpcore import (
     ConnectionNotAvailable,
     Origin,
     RemoteProtocolError,
+    UnsupportedProtocol,
     WriteError,
 )
 
@@ -233,6 +234,38 @@ def test_request_to_incorrect_origin():
     ) as conn:
         with pytest.raises(RuntimeError):
             conn.request("GET", "https://other.com/")
+
+
+
+def test_http_connection_unsupported_protocol():
+    """
+    A URL with an unsupported scheme raises `UnsupportedProtocol`,
+    rather than an unhandled `KeyError` from `URL.origin`.
+    """
+    origin = Origin(b"foo", b"example.com", 123)
+    network_backend = MockBackend([])
+    with HTTPConnection(
+        origin=origin, network_backend=network_backend
+    ) as conn:
+        with pytest.raises(
+            UnsupportedProtocol, match="unsupported protocol 'foo://'"
+        ):
+            conn.request("GET", "foo://example.com/")
+
+
+
+def test_http_connection_missing_protocol():
+    """
+    A URL with a missing scheme raises `UnsupportedProtocol`,
+    rather than an unhandled `KeyError` from `URL.origin`.
+    """
+    origin = Origin(b"", b"example.com", 80)
+    network_backend = MockBackend([])
+    with HTTPConnection(
+        origin=origin, network_backend=network_backend
+    ) as conn:
+        with pytest.raises(UnsupportedProtocol, match="missing an 'http://'"):
+            conn.request("GET", "//example.com/")
 
 
 class NeedsRetryBackend(MockBackend):

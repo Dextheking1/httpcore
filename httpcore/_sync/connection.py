@@ -8,7 +8,7 @@ import typing
 
 from .._backends.sync import SyncBackend
 from .._backends.base import SOCKET_OPTION, NetworkBackend, NetworkStream
-from .._exceptions import ConnectError, ConnectTimeout
+from .._exceptions import ConnectError, ConnectTimeout, UnsupportedProtocol
 from .._models import Origin, Request, Response
 from .._ssl import default_ssl_context
 from .._synchronization import Lock
@@ -67,6 +67,16 @@ class HTTPConnection(ConnectionInterface):
         self._socket_options = socket_options
 
     def handle_request(self, request: Request) -> Response:
+        scheme = request.url.scheme.decode()
+        if scheme == "":
+            raise UnsupportedProtocol(
+                "Request URL is missing an 'http://' or 'https://' protocol."
+            )
+        if scheme not in ("http", "https", "ws", "wss"):
+            raise UnsupportedProtocol(
+                f"Request URL has an unsupported protocol '{scheme}://'."
+            )
+
         if not self.can_handle_request(request.url.origin):
             raise RuntimeError(
                 f"Attempted to send request to {request.url.origin} on connection to {self._origin}"
