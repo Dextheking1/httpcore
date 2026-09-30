@@ -47,7 +47,7 @@ class FakeStream(httpcore.NetworkStream):
         self._server.send_data(stream_id, b"ok", end_stream=True)
 
     # -- NetworkStream interface --
-    def write(self, buffer: bytes, timeout: float | None = None) -> None:
+    def write(self, buffer: bytes, timeout: typing.Optional[float] = None) -> None:
         with self._lock:
             if buffer:
                 for event in self._server.receive_data(buffer):
@@ -67,7 +67,7 @@ class FakeStream(httpcore.NetworkStream):
                             self._respond(event.stream_id)
             self._cond.notify_all()
 
-    def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+    def read(self, max_bytes: int, timeout: typing.Optional[float] = None) -> bytes:
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._lock:
             while True:
