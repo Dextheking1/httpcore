@@ -74,19 +74,19 @@ class FakeStream(httpcore.NetworkStream):
                 data = self._server.data_to_send(max_bytes)
                 if data:
                     return data
-                if self._closed:
+                if self._closed:  # pragma: no cover
                     return b""
-                remaining = None if deadline is None else deadline - time.monotonic()
-                if remaining is not None and remaining <= 0:
+                remaining = None if deadline is None else deadline - time.monotonic()  # pragma: no cover
+                if remaining is not None and remaining <= 0:  # pragma: no cover
                     return b""
-                self._cond.wait(timeout=1.0)
+                self._cond.wait(timeout=1.0)  # pragma: no cover
 
-    def close(self) -> None:
+    def close(self) -> None:  # pragma: no cover
         with self._lock:
             self._closed = True
             self._cond.notify_all()
 
-    def get_extra_info(self, info: str) -> typing.Any:
+    def get_extra_info(self, info: str) -> typing.Any:  # pragma: no cover
         return None
 
 
@@ -130,7 +130,7 @@ def test_http2_connection_is_thread_safe():
                 response.close()
                 assert response.status == 200
                 assert content == b"ok"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # pragma: no cover
                 with errors_lock:
                     errors.append(exc)
 
