@@ -36,7 +36,7 @@ class FakeStream(httpcore.NetworkStream):
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
         self._closed = False
-        self._responded: set[int] = set()
+        self._responded: typing.Set[int] = set()
 
     def _respond(self, stream_id: int) -> None:
         self._server.send_headers(
@@ -71,7 +71,7 @@ class FakeStream(httpcore.NetworkStream):
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._lock:
             while True:
-                data = self._server.data_to_send(max_bytes)
+                data: bytes = self._server.data_to_send(max_bytes)
                 if data:
                     return data
                 if self._closed:  # pragma: no cover
